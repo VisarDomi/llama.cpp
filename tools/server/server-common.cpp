@@ -697,8 +697,28 @@ server_tokens process_mtmd_prompt(mtmd_context * mctx, const std::string & promp
         if (file.video_fps > 0.0f) {
             video_params.fps_target = file.video_fps;
         }
-        auto out = mtmd_helper_bitmap_init_from_buf_with_video_params(mctx, file.data.data(), file.data.size(), is_placeholder, video_params);
+        mtmd_helper_bitmap_wrapper out;
+        if (!file.local_path.empty()) {
+            auto * video_ctx = mtmd_helper_video_init(mctx, file.local_path.c_str(), video_params);
+            auto * bitmap = video_ctx == nullptr ? nullptr : mtmd_bitmap_init_lazy(
+                mctx,
+                file.local_path.c_str(),
+                video_ctx,
+                [](size_t, void * user_data, mtmd_bitmap ** out_bitmap, char ** out_text) {
+                    return mtmd_helper_video_read_next(
+                        static_cast<mtmd_helper_video *>(user_data),
+                        out_bitmap,
+                        out_text);
+                });
+            out = {bitmap, video_ctx};
+        } else {
+            out = mtmd_helper_bitmap_init_from_buf_with_video_params(
+                mctx, file.data.data(), file.data.size(), is_placeholder, video_params);
+        }
         if (!out.bitmap) {
+            if (out.video_ctx) {
+                mtmd_helper_video_free(out.video_ctx);
+            }
             throw std::runtime_error("Failed to load media file");
         }
         bitmaps.entries.emplace_back(out.bitmap);
@@ -840,7 +860,8 @@ static void handle_media(
         std::vector<server_media> & out_files,
         const std::string & url,
         const std::string & media_path,
-        bool accept_base64_uri) {
+        bool accept_base64_uri,
+        bool preserve_local_path = false) {
     if (!media_path.empty()) {
         // should already be enforced by arg.cpp, but checking just in case
         GGML_ASSERT(media_path.back() == DIRECTORY_SEPARATOR);
@@ -873,7 +894,12 @@ static void handle_media(
         if (!fs_validate_filename(file_path, true)) {
             throw std::invalid_argument("file path is not allowed: " + file_path);
         }
-        SRV_INF("loading image from local file '%s'\n", (media_path + file_path).c_str());
+        SRV_INF("loading media from local file '%s'\n", (media_path + file_path).c_str());
+        if (preserve_local_path) {
+            data.local_path = media_path + file_path;
+            out_files.push_back(std::move(data));
+            return;
+        }
         std::ifstream file(media_path + file_path, std::ios::binary);
         if (!file) {
             throw std::invalid_argument("file does not exist or cannot be opened: " + file_path);
@@ -1035,7 +1061,7 @@ json oaicompat_chat_params_parse(
                         throw std::invalid_argument("input_video.fps must be finite and greater than zero");
                     }
                 }
-                handle_media(out_files, url, opt.media_path, false);
+                handle_media(out_files, url, opt.media_path, false, true);
                 out_files.back().video_fps = fps;
 
                 p["type"] = "media_marker";

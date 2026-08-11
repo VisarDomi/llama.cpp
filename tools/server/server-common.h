@@ -39,6 +39,7 @@ using raw_buffer = std::vector<uint8_t>;
 
 struct server_media {
     raw_buffer data;
+    std::string local_path = {};
     float video_fps = 0.0f;
 };
 
