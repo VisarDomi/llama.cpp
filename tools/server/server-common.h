@@ -37,6 +37,11 @@ using json = nlohmann::ordered_json;
 
 using raw_buffer = std::vector<uint8_t>;
 
+struct server_media {
+    raw_buffer data;
+    float video_fps = 0.0f;
+};
+
 template <typename T>
 static T json_value(const json & body, const std::string & key, const T & default_value) {
     // Fallback null to default value
@@ -266,7 +271,7 @@ size_t validate_utf8(const std::string& text);
 
 // process mtmd prompt, return the server_tokens containing both text tokens and media chunks
 // if is_placeholder is true, the media chunk will be treated as placeholder for counting tokens; the output tokens are not usable for actual inference (e.g. for submitting a task to server_queue)
-server_tokens process_mtmd_prompt(mtmd_context * mctx, const std::string & prompt, const std::vector<raw_buffer> & files, bool is_placeholder = false);
+server_tokens process_mtmd_prompt(mtmd_context * mctx, const std::string & prompt, const std::vector<server_media> & files, bool is_placeholder = false);
 
 /**
  * break the input "prompt" object into multiple prompt if needed, then tokenize them
@@ -316,7 +321,7 @@ json oaicompat_completion_params_parse(const json & body);
 json oaicompat_chat_params_parse(
     json & body, /* openai api json semantics */
     const server_chat_params & opt,
-    std::vector<raw_buffer> & out_files);
+    std::vector<server_media> & out_files);
 
 // TODO: move it to server-task.cpp
 json format_embeddings_response_oaicompat(

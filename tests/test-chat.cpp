@@ -6909,7 +6909,7 @@ static void test_reasoning_budget_tokens_per_request() {
         {"messages", json::array({json{{"role", "user"}, {"content", "hello"}}})},
         {"reasoning_budget_tokens", 0},
     };
-    std::vector<raw_buffer> out_files;
+    std::vector<server_media> out_files;
     auto llama_params = oaicompat_chat_params_parse(body, opt, out_files);
 
     // The per-request value must win over the server default (-1).
@@ -6942,7 +6942,7 @@ static void test_reasoning_budget_message_per_request() {
         {"messages", json::array({json{{"role", "user"}, {"content", "hello"}}})},
         {"reasoning_budget_message", per_request_message},
     };
-    std::vector<raw_buffer> out_files;
+    std::vector<server_media> out_files;
     auto llama_params = oaicompat_chat_params_parse(body, opt, out_files);
 
     // The per-request value must win over the server default.
@@ -6952,6 +6952,63 @@ static void test_reasoning_budget_message_per_request() {
     std::string got = llama_params["reasoning_budget_message"].get<std::string>();
     if (got != per_request_message) {
         throw std::runtime_error("Expected reasoning_budget_message='" + per_request_message + "', got '" + got + "'");
+    }
+}
+
+static json video_request(const json & input_video) {
+    return {
+        {"messages", json::array({
+            json{
+                {"role", "user"},
+                {"content", json::array({
+                    json{{"type", "input_video"}, {"input_video", input_video}},
+                    json{{"type", "text"}, {"text", "Describe the video."}},
+                })},
+            },
+        })},
+    };
+}
+
+static server_chat_params video_chat_params() {
+    server_chat_params opt;
+    opt.tmpls       = read_templates("models/templates/google-gemma-4-31B-it.jinja");
+    opt.use_jinja   = true;
+    opt.allow_video = true;
+    return opt;
+}
+
+static void test_video_fps_per_request() {
+    LOG_DBG("%s\n", __func__);
+
+    {
+        auto body = video_request(json{{"url", "AA=="}, {"fps", 0.5}});
+        auto opt = video_chat_params();
+        std::vector<server_media> out_files;
+        oaicompat_chat_params_parse(body, opt, out_files);
+        if (out_files.size() != 1 || out_files[0].video_fps != 0.5f) {
+            throw std::runtime_error("input_video.fps was not preserved");
+        }
+    }
+
+    {
+        auto body = video_request(json{{"url", "AA=="}});
+        auto opt = video_chat_params();
+        std::vector<server_media> out_files;
+        oaicompat_chat_params_parse(body, opt, out_files);
+        if (out_files.size() != 1 || out_files[0].video_fps != 0.0f) {
+            throw std::runtime_error("omitted input_video.fps did not preserve the default");
+        }
+    }
+
+    for (const json & fps : {json(0), json(-1), json("1")}) {
+        auto body = video_request(json{{"url", "AA=="}, {"fps", fps}});
+        auto opt = video_chat_params();
+        std::vector<server_media> out_files;
+        try {
+            oaicompat_chat_params_parse(body, opt, out_files);
+            throw std::runtime_error("invalid input_video.fps was accepted");
+        } catch (const std::invalid_argument &) {
+        }
     }
 }
 
@@ -7116,6 +7173,7 @@ int main(int argc, char ** argv) {
         test_template_generation_prompt();
         test_reasoning_budget_tokens_per_request();
         test_reasoning_budget_message_per_request();
+        test_video_fps_per_request();
         test_template_output_peg_parsers(detailed_debug);
         std::cout << "\n[chat] All tests passed!" << '\n';
     }

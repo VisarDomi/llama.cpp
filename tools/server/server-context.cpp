@@ -4103,7 +4103,7 @@ std::unique_ptr<server_res_generator> server_routes::handle_completions_impl(
             const server_http_req & req,
             server_task_type type,
             const json & data,
-            const std::vector<raw_buffer> & files,
+            const std::vector<server_media> & files,
             task_response_type res_type) {
     GGML_ASSERT(type == SERVER_TASK_TYPE_COMPLETION || type == SERVER_TASK_TYPE_INFILL);
 
@@ -4732,7 +4732,7 @@ void server_routes::init_routes() {
             tokenized_prompts[0].get_tokens() // TODO: this could maybe be multimodal.
         );
 
-        std::vector<raw_buffer> files; // dummy
+        std::vector<server_media> files; // dummy
         return handle_completions_impl(
             req,
             SERVER_TASK_TYPE_INFILL,
@@ -4743,7 +4743,7 @@ void server_routes::init_routes() {
 
     this->post_completions = [this](const server_http_req & req) {
         auto res = create_response();
-        std::vector<raw_buffer> files; // dummy
+        std::vector<server_media> files; // dummy
         const json body = json::parse(req.body);
         return handle_completions_impl(
             req,
@@ -4755,7 +4755,7 @@ void server_routes::init_routes() {
 
     this->post_completions_oai = [this](const server_http_req & req) {
         auto res = create_response();
-        std::vector<raw_buffer> files; // dummy
+        std::vector<server_media> files; // dummy
         const json body = json::parse(req.body);
         return handle_completions_impl(
             req,
@@ -4767,7 +4767,7 @@ void server_routes::init_routes() {
 
     this->post_chat_completions = [this](const server_http_req & req) {
         auto res = create_response();
-        std::vector<raw_buffer> files;
+        std::vector<server_media> files;
         json body = json::parse(req.body);
         json body_parsed = oaicompat_chat_params_parse(
             body,
@@ -4824,7 +4824,7 @@ void server_routes::init_routes() {
 
     this->post_responses_oai = [this](const server_http_req & req) {
         auto res = create_response();
-        std::vector<raw_buffer> files;
+        std::vector<server_media> files;
         json body = server_chat_convert_responses_to_chatcmpl(json::parse(req.body));
         SRV_DBG("%s\n", "Request converted: OpenAI Responses -> OpenAI Chat Completions");
         SRV_DBG("converted request: %s\n", body.dump().c_str());
@@ -4852,7 +4852,7 @@ void server_routes::init_routes() {
             return res;
         }
 
-        std::vector<raw_buffer> files;
+        std::vector<server_media> files;
         json body = convert_transcriptions_to_chatcmpl(
             json::parse(req.body),
             meta->chat_params.tmpls.get(),
@@ -4874,7 +4874,7 @@ void server_routes::init_routes() {
 
     this->post_anthropic_messages = [this](const server_http_req & req) {
         auto res = create_response();
-        std::vector<raw_buffer> files;
+        std::vector<server_media> files;
         json body = server_chat_convert_anthropic_to_oai(json::parse(req.body));
         SRV_DBG("%s\n", "Request converted: Anthropic -> OpenAI Chat Completions");
         SRV_DBG("converted request: %s\n", body.dump().c_str());
@@ -4897,7 +4897,7 @@ void server_routes::init_routes() {
     // same with handle_chat_completions, but without inference part
     this->post_apply_template = [this](const server_http_req & req) {
         auto res = create_response();
-        std::vector<raw_buffer> files; // dummy, unused
+        std::vector<server_media> files; // dummy, unused
         json body = json::parse(req.body);
         json data = oaicompat_chat_params_parse(
             body,
@@ -5375,7 +5375,7 @@ std::unique_ptr<server_res_generator> server_routes::handle_embeddings_impl(cons
 
 std::unique_ptr<server_res_generator> server_routes::handle_count_tokens(const llama_vocab * vocab, mtmd_context * mctx, const server_http_req & req, task_response_type res_type) {
     auto res = create_response();
-    std::vector<raw_buffer> files;
+    std::vector<server_media> files;
     json body = json::parse(req.body);
     bool is_oai = false;
 

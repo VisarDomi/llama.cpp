@@ -21,6 +21,6 @@ json convert_transcriptions_to_chatcmpl(
     const json & body,
     const common_chat_templates * tmpls,
     const std::map<std::string, uploaded_file> & in_files,
-    std::vector<raw_buffer> & out_files);
+    std::vector<server_media> & out_files);
 
 json server_chat_msg_diff_to_json_oaicompat(const common_chat_msg_diff & diff);

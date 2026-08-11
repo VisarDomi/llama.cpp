@@ -368,7 +368,12 @@ static std::string fnv_hash(const uint8_t * data, size_t len) {
     return std::to_string(hash);
 }
 
-mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf(mtmd_context * ctx, const unsigned char * buf, size_t len, bool placeholder) {
+static mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf_impl(
+        mtmd_context * ctx,
+        const unsigned char * buf,
+        size_t len,
+        bool placeholder,
+        const mtmd_helper_video_init_params * video_params) {
     // calculate the hash if needed
     std::string id;
     mtmd_bitmap * result = nullptr;
@@ -409,7 +414,7 @@ mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf(mtmd_context * ctx, 
     // last try: load as video
 #ifdef MTMD_VIDEO
     if (!result) {
-        auto params = mtmd_helper_video_init_params_default();
+        auto params = video_params ? *video_params : mtmd_helper_video_init_params_default();
         auto video_ctx = mtmd_helper_video_init_from_buf(ctx, buf, len, params);
         if (!video_ctx) {
             LOG_ERR("%s: failed to decode buffer as either image/audio/video\n", __func__);
@@ -436,6 +441,19 @@ mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf(mtmd_context * ctx, 
 
     // should not reach here
     return {nullptr, nullptr};
+}
+
+mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf(mtmd_context * ctx, const unsigned char * buf, size_t len, bool placeholder) {
+    return mtmd_helper_bitmap_init_from_buf_impl(ctx, buf, len, placeholder, nullptr);
+}
+
+mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf_with_video_params(
+        mtmd_context * ctx,
+        const unsigned char * buf,
+        size_t len,
+        bool placeholder,
+        mtmd_helper_video_init_params params) {
+    return mtmd_helper_bitmap_init_from_buf_impl(ctx, buf, len, placeholder, &params);
 }
 
 mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_file(mtmd_context * ctx, const char * fname, bool placeholder) {

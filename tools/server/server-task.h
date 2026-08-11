@@ -157,7 +157,7 @@ struct server_task {
     // we need this because mtmd_context and vocab are not accessible outside of server_context
     bool                    cli = false;
     std::string             cli_prompt;
-    std::vector<raw_buffer> cli_files;
+    std::vector<server_media> cli_files;
 
     server_task_type type;
 

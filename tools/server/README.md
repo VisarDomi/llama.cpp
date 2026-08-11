@@ -1272,6 +1272,7 @@ For multimodal input (typed content, `messages[i].content[j]`):
     - `input_audio.format` will be ignored, the file format will be determined automatically
 - If `type == "input_video"`:
     - Either `input_video.data` or `input_video.url` can be specified, can be a remote URL, raw base64 or path to local file
+    - `input_video.fps` optionally sets the frame sampling rate for this video and must be greater than zero
     - Accepts formats supported by `ffmpeg`
 - Note: for local file, make sure to set `--media-path`. File path must be prefixed by `file://`
 

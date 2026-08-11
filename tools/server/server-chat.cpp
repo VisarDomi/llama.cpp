@@ -638,13 +638,13 @@ json convert_transcriptions_to_chatcmpl(
         const json & inp_body,
         const common_chat_templates * tmpls,
         const std::map<std::string, uploaded_file> & in_files,
-        std::vector<raw_buffer> & out_files) {
+        std::vector<server_media> & out_files) {
     // TODO @ngxson : this function may need to be improved in the future
     // handle input files
     out_files.clear();
     auto it = in_files.find("file");
     if (it != in_files.end()) {
-        out_files.push_back(it->second.data);
+        out_files.push_back({it->second.data});
     } else {
         throw std::invalid_argument("No input file found for transcription");
     }

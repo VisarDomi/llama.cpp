@@ -132,6 +132,12 @@ struct mtmd_helper_video_init_params {
 
 MTMD_API struct mtmd_helper_video_init_params mtmd_helper_video_init_params_default(void);
 
+MTMD_API struct mtmd_helper_bitmap_wrapper mtmd_helper_bitmap_init_from_buf_with_video_params(
+                    struct mtmd_context * mctx,
+                    const unsigned char * buf, size_t len,
+                    bool placeholder,
+                    struct mtmd_helper_video_init_params params);
+
 // returns NULL on failure (ffprobe not found, file unreadable, etc.)
 MTMD_API mtmd_helper_video * mtmd_helper_video_init(
                     struct mtmd_context * mctx,
