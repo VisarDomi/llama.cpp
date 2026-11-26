@@ -746,7 +746,7 @@ struct mtmd_helper_video {
                 // clean EOF only if no bytes read yet; partial frame is an error
                 LOG_DBG("%s: fread returned 0 after %zu/%zu bytes (ferror=%d)\n",
                         __func__, total_read, frame_size, ferror(fp));
-                sp.alive = false;
+                sp.stop();
                 return nullptr;
             }
             total_read += n;

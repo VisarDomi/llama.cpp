@@ -1136,8 +1136,6 @@ struct mtmd_tokenizer {
         if (n_markers != bitmaps.size()) {
             throw std::runtime_error(string_format("number of media markers in text (%zu) does not match number of bitmaps (%zu)", n_markers, bitmaps.size()));
         }
-
-        expand_lazy_bitmaps();
     }
 
     void expand_lazy_bitmaps() {
@@ -1192,10 +1190,59 @@ struct mtmd_tokenizer {
             GGML_ASSERT(n_merge_frames <= 2 && "we only support merging maximum 2 images for now; open an issue if this model supports merging more");
         }
 
-        // Build merged_bitmaps: each entry is a group of 1 or 2 bitmaps.
-        // For consecutive mergeable bitmap parts, merge them and collapse the second part out of this->parts.
-        std::vector<std::vector<const mtmd_bitmap *>> merged_bitmaps;
-        if (n_merge_frames > 1) {
+        if (n_merge_frames == 1) {
+            // Stream lazy bitmaps one frame at a time so multi-minute videos do not
+            // materialize gigabytes of raw RGB24 frames in RAM simultaneously.
+            for (const auto & p : parts) {
+                if (p.bitmap != nullptr && p.bitmap->lazy_callback) {
+                    LOG_DBG("%s: streaming lazy bitmap\n", __func__);
+                    for (size_t i = 0;; i++) {
+                        char * out_str = nullptr;
+                        mtmd_bitmap * out_bm = nullptr;
+                        int res = p.bitmap->lazy_callback(i,
+                                        p.bitmap->lazy_user_data,
+                                        &out_bm,
+                                        &out_str);
+                        if (out_bm && out_str) {
+                            mtmd_bitmap_free(out_bm);
+                            free(out_str);
+                            throw std::runtime_error(string_format("lazy callback cannot return both bitmap and text"));
+                        }
+                        if (res == 0) {
+                            if (out_bm) {
+                                mtmd::bitmap owned(out_bm);
+                                std::vector<const mtmd_bitmap *> bmps = { owned.ptr.get() };
+                                int32_t media_res = add_media(bmps);
+                                if (media_res != 0) {
+                                    return media_res;
+                                }
+                            } else if (out_str) {
+                                std::string txt(out_str);
+                                free(out_str);
+                                add_text(txt, parse_special);
+                            }
+                        } else if (res == -1) {
+                            break;
+                        } else if (res == -2) {
+                            throw std::runtime_error(string_format("lazy callback returned error"));
+                        }
+                    }
+                } else if (p.bitmap != nullptr) {
+                    std::vector<const mtmd_bitmap *> bmps = { p.bitmap };
+                    int32_t res = add_media(bmps);
+                    if (res != 0) {
+                        return res;
+                    }
+                } else {
+                    add_text(p.text, parse_special);
+                }
+            }
+        } else {
+            expand_lazy_bitmaps();
+
+            // Build merged_bitmaps: each entry is a group of 1 or 2 bitmaps.
+            // For consecutive mergeable bitmap parts, merge them and collapse the second part out of this->parts.
+            std::vector<std::vector<const mtmd_bitmap *>> merged_bitmaps;
             for (size_t i = 0; i < parts.size(); ++i) {
                 if (parts[i].bitmap == nullptr) {
                     continue;
@@ -1213,29 +1260,29 @@ struct mtmd_tokenizer {
                 LOG_DBG("%s: no merging for part index %zu\n", __func__, i);
                 merged_bitmaps.push_back({parts[i].bitmap});
             }
-        } else {
+
+            size_t i_bm = 0;
             for (const auto & p : parts) {
                 if (p.bitmap != nullptr) {
-                    merged_bitmaps.push_back({p.bitmap});
+                    if (i_bm >= merged_bitmaps.size()) {
+                        LOG_ERR("%s: error: number of bitmaps (%zu) does not match number of markers (%zu)\n",
+                                __func__, merged_bitmaps.size(), parts.size() - 1);
+                        return 1;
+                    }
+                    auto bmps = merged_bitmaps[i_bm++];
+                    int32_t res = add_media(bmps);
+                    if (res != 0) {
+                        return res;
+                    }
+                } else {
+                    add_text(p.text, parse_special);
                 }
             }
-        }
 
-        size_t i_bm = 0;
-        for (const auto & p : parts) {
-            if (p.bitmap != nullptr) {
-                if (i_bm >= merged_bitmaps.size()) {
-                    LOG_ERR("%s: error: number of bitmaps (%zu) does not match number of markers (%zu)\n",
-                            __func__, merged_bitmaps.size(), parts.size() - 1);
-                    return 1;
-                }
-                auto bmps = merged_bitmaps[i_bm++];
-                int32_t res = add_media(bmps);
-                if (res != 0) {
-                    return res;
-                }
-            } else {
-                add_text(p.text, parse_special);
+            if (i_bm != merged_bitmaps.size()) {
+                LOG_ERR("%s: error: number of bitmaps (%zu) does not match number of markers (%zu)\n",
+                        __func__, merged_bitmaps.size(), parts.size() - 1);
+                return 1;
             }
         }
 
@@ -1262,12 +1309,6 @@ struct mtmd_tokenizer {
                 // if last chunk is text, we add EOS token to it
                 add_text({llama_vocab_eos(vocab)});
             }
-        }
-
-        if (i_bm != merged_bitmaps.size()) {
-            LOG_ERR("%s: error: number of bitmaps (%zu) does not match number of markers (%zu)\n",
-                    __func__, merged_bitmaps.size(), parts.size() - 1);
-            return 1;
         }
 
         *output = std::move(cur);
