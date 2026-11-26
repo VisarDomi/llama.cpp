@@ -545,6 +545,7 @@ struct mtmd_helper_video {
                 feeder.join();
             }
             if (alive) {
+                subprocess_join(&proc, nullptr);
                 subprocess_destroy(&proc);
                 alive = false;
             }
